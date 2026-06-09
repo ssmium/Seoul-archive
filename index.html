@@ -321,20 +321,51 @@ var EMOJI={cafe:'☕',shop:'🛍',dong:'🏘',book:'📚',etc:'📌'};
 var LABEL={cafe:'카페',shop:'소품샵',dong:'동네',book:'독립서점',etc:'기타'};
 
 // ── SUPABASE ──
-var SB_URL=localStorage.getItem('sb_url')||'';
-var SB_KEY=localStorage.getItem('sb_key')||'';
+var SB_URL='';
+var SB_KEY='';
 var SB_READY=false;
 
 function sbFetch(method,path,body){
   return fetch(SB_URL+path,{
     method:method,
-    headers:{'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY,'Content-Type':'application/json','Prefer':method==='POST'?'resolution=merge-duplicates':''},
+    headers:{
+      'apikey':SB_KEY,
+      'Authorization':'Bearer '+SB_KEY,
+      'Content-Type':'application/json',
+      'Prefer': method==='POST'?'resolution=merge-duplicates,return=minimal':''
+    },
     body:body?JSON.stringify(body):undefined
   });
 }
-async function initSB(){
-  if(!SB_URL||!SB_KEY)return false;
-  try{var r=await sbFetch('GET','/rest/v1/places?select=id&limit=1');SB_READY=r.ok;return r.ok;}catch(e){return false;}
+
+async function sbConnect(url, key){
+  SB_URL=url; SB_KEY=key;
+  try{
+    var r=await sbFetch('GET','/rest/v1/places?select=id&limit=1');
+    SB_READY=r.ok||r.status===406; // 406도 인증 성공
+    return SB_READY;
+  }catch(e){SB_READY=false;return false;}
+}
+
+async function sbSaveOne(place){
+  if(!SB_READY)return;
+  try{
+    await sbFetch('POST','/rest/v1/places',[place]);
+  }catch(e){}
+}
+
+async function sbDeleteOne(id){
+  if(!SB_READY)return;
+  try{await sbFetch('DELETE','/rest/v1/places?id=eq.'+id);}catch(e){}
+}
+
+async function sbLoadAll(){
+  if(!SB_READY)return null;
+  try{
+    var r=await sbFetch('GET','/rest/v1/places?select=*&order=created_at.desc');
+    if(r.ok){var d=await r.json();return Array.isArray(d)?d:null;}
+  }catch(e){}
+  return null;
 }
 
 // ── STORAGE ──
@@ -344,30 +375,39 @@ function lsLoad(){
 function lsSave(){
   localStorage.setItem('seoul_archive',JSON.stringify(places));
 }
+
 async function loadPlaces(){
-  // 항상 localStorage 먼저 읽기 (즉시 표시)
+  // 1. 항상 localStorage 먼저 (빠르게 표시)
   lsLoad();
-  // Supabase 연결됐으면 클라우드 데이터로 덮어쓰기
+  // 2. Supabase 있으면 병합 (localStorage에 없는 것만 추가)
   if(SB_READY){
-    try{
-      var r=await sbFetch('GET','/rest/v1/places?select=*&order=created_at.desc');
-      if(r.ok){
-        var data=await r.json();
-        if(data&&data.length){places=data;lsSave();} // 클라우드 데이터를 localStorage에도 동기화
-      }
-    }catch(e){}
+    var sbData=await sbLoadAll();
+    if(sbData&&sbData.length){
+      // id 기준으로 병합 (로컬 우선)
+      var localIds=new Set(places.map(function(p){return p.id;}));
+      sbData.forEach(function(p){
+        if(!localIds.has(p.id))places.push(p);
+      });
+      // created_at 기준 정렬
+      places.sort(function(a,b){return b.id-a.id;});
+      lsSave();
+    }
   }
 }
-async function savePlaces(){
-  lsSave(); // 항상 localStorage에 먼저 저장
-  if(SB_READY){
-    try{await sbFetch('POST','/rest/v1/places',places);}catch(e){}
+
+async function savePlaces(newPlace){
+  // localStorage에 전체 저장
+  lsSave();
+  // Supabase엔 새 장소 하나만 upsert
+  if(SB_READY&&newPlace){
+    await sbSaveOne(newPlace);
   }
 }
+
 async function deletePlace(id){
   places=places.filter(function(p){return p.id!==id;});
   lsSave();
-  if(SB_READY){try{await sbFetch('DELETE','/rest/v1/places?id=eq.'+id);}catch(e){}}
+  await sbDeleteOne(id);
   activePopupId=null;
   renderSidebar();renderPins();
   if(kakaoMap)renderKakaoMarkers();
@@ -589,7 +629,7 @@ document.getElementById('submit-btn').addEventListener('click',async function(){
     date:document.getElementById('f-date').value,photo:photoDataUrl||null,lat:lat,lng:lng,
     x:(pendingCoord&&!pendingCoord.kakao)?pendingCoord.x:null,y:(pendingCoord&&!pendingCoord.kakao)?pendingCoord.y:null};
   places.unshift(place);
-  await savePlaces(); // await로 저장 완료 보장
+  await savePlaces(place); // 새 장소를 Supabase에 개별 저장
   renderSidebar();
   if(kakaoMap){renderKakaoMarkers();if(lat&&lng)setTimeout(function(){kakaoMap.setCenter(new window.kakao.maps.LatLng(lat,lng));showKakaoPopup(place);},200);}
   else renderPins();
@@ -735,7 +775,7 @@ document.getElementById('cfg-sb-save').addEventListener('click',async function()
   if(!url||!key||key.includes('•')){if(url){SB_URL=url;localStorage.setItem('sb_url',url);}return;}
   SB_URL=url;SB_KEY=key;localStorage.setItem('sb_url',url);localStorage.setItem('sb_key',key);
   var btn=document.getElementById('cfg-sb-save');btn.textContent='연결 중...';btn.disabled=true;
-  var ok=await initSB();btn.textContent='연결하기';btn.disabled=false;
+  var ok=await sbConnect(url,key);btn.textContent='연결하기';btn.disabled=false;
   var note=document.getElementById('cfg-sb-note');
   note.innerHTML=ok?'✅ 연결됨 — 클라우드 저장 활성화':'❌ 연결 실패 — URL과 키를 확인해주세요';
   note.style.color=ok?'#1A7F3C':'#E03030';
@@ -749,8 +789,11 @@ if(savedSbKey)document.getElementById('cfg-sb-key').value='•••••••
 
 // ── INIT ──
 (async function(){
-  if(SB_URL&&SB_KEY){
-    var ok=await initSB();
+  // Supabase 저장된 키로 자동 연결 시도
+  var savedSbUrl2=localStorage.getItem('sb_url');
+  var savedSbKey2=localStorage.getItem('sb_key');
+  if(savedSbUrl2&&savedSbKey2){
+    var ok=await sbConnect(savedSbUrl2,savedSbKey2);
     var note=document.getElementById('cfg-sb-note');
     note.innerHTML=ok?'✅ 연결됨 — 클라우드 저장 활성화':'연결하면 클라우드에 저장돼요.';
     note.style.color=ok?'#1A7F3C':'';
