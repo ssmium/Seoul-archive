@@ -604,6 +604,7 @@
     <div id="kakao-connected-badge" class="kakao-connected hidden">✅ 카카오맵 연결됨</div>
     <input type="password" class="kakao-key-input" id="kakao-key-input" placeholder="JavaScript 키 입력">
     <button class="kakao-setup-btn" id="kakao-setup-btn">연결하기</button>
+    <div id="kakao-err-msg" style="display:none;margin-top:10px;padding:10px 12px;background:#FFF0F0;border-radius:8px;font-size:12px;color:#C0392B;line-height:1.7;"></div>
     <button class="kakao-skip-btn" id="kakao-skip-btn">일단 샘플 지도로 사용할게요</button>
   </div>
 </div>
@@ -1154,8 +1155,12 @@ document.getElementById('kakao-setup-btn').addEventListener('click', async funct
   } catch(e) {
     btn.textContent = '연결하기'; btn.disabled = false;
     input.style.borderColor = '#E03030';
-    input.value = '';
-    input.placeholder = '키를 다시 확인해주세요';
+    const errDiv = document.getElementById('kakao-err-msg');
+    if (errDiv) {
+      errDiv.style.display = 'block';
+      const origin = location.protocol + '//' + (location.hostname || 'localhost');
+      errDiv.innerHTML = '❌ 연결 실패 — 카카오 콘솔 &gt; 플랫폼 &gt; Web에<br><code style="background:#F2F4F6;padding:2px 5px;border-radius:4px;">' + origin + '</code><br>등록 후 다시 시도해주세요.';
+    }
   }
 });
 
