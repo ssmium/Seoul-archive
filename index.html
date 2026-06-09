@@ -646,6 +646,11 @@
         <div class="form-label">동네</div>
         <input type="text" class="form-input" id="input-dong" placeholder="예: 상수동, 을지로">
       </div>
+      <!-- Address -->
+      <div class="form-group">
+        <div class="form-label">주소 <span style="font-size:11px;color:var(--sub);font-weight:400">(입력하면 지도에 정확히 핀이 찍혀요)</span></div>
+        <input type="text" class="form-input" id="input-address" placeholder="예: 마포구 와우산로 123">
+      </div>
       <!-- Photo -->
       <div class="form-group">
         <div class="form-label">사진</div>
@@ -864,17 +869,13 @@ function showPopup(id, x, y) {
       ${p.memo ? `<div class="popup-memo">${p.memo}</div>` : ''}
       <div class="popup-actions">
         ${p.url ? `<button class="popup-btn primary" onclick="window.open('${p.url}','_blank')">✍ 포스팅 보기</button>` : ''}
-        <button class="popup-btn danger" id="popup-delete">삭제</button>
+        <button class="popup-btn danger" onclick="deletePlace('${p.id}');closePopup();">삭제</button>
       </div>
     </div>
   `;
   container.appendChild(popup);
 
   popup.querySelector('#popup-close').addEventListener('click', closePopup);
-  popup.querySelector('#popup-delete').addEventListener('click', () => {
-    deletePlace(id);
-    closePopup();
-  });
 }
 
 function closePopup() {
@@ -939,6 +940,7 @@ function closeModal() {
 function resetForm() {
   document.getElementById('input-name').value = '';
   document.getElementById('input-dong').value = '';
+  document.getElementById('input-address').value = '';
   document.getElementById('input-memo').value = '';
   document.getElementById('input-url').value = '';
   document.getElementById('coord-display').textContent = '지도를 클릭하면 좌표가 자동으로 잡혀요';
@@ -1017,7 +1019,8 @@ document.getElementById('btn-submit').addEventListener('click', () => {
   async function saveWithGeocode() {
     if (kakaoMap && !placeData.lat && window.kakao && window.kakao.maps && window.kakao.maps.services) {
       const geocoder = new window.kakao.maps.services.Places();
-      const query = (dong ? dong + ' ' : '서울 ') + name;
+      const address = document.getElementById('input-address').value.trim();
+    const query = address ? address : (dong ? dong + ' ' : '서울 ') + name;
       await new Promise(function(resolve) {
         geocoder.keywordSearch(query, function(result, status) {
           if (status === window.kakao.maps.services.Status.OK && result.length > 0) {
