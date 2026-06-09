@@ -1131,8 +1131,10 @@ function loadKakaoScript(apiKey) {
 }
 
 function initKakaoMap() {
-  document.getElementById('map-fallback').style.display = 'none';
-  document.getElementById('map-notice').style.display = 'none';
+  var fallback = document.getElementById('map-fallback');
+  if (fallback) fallback.style.display = 'none';
+  var notice = document.getElementById('map-notice');
+  if (notice) notice.style.display = 'none';
   const mapDiv = document.getElementById('map');
   mapDiv.style.background = '';
   const container = document.createElement('div');
