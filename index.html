@@ -866,14 +866,34 @@ function doSearch(query) {
     ps.keywordSearch('서울 ' + query, function(data, status) {
       if (status !== window.kakao.maps.services.Status.OK || !data.length) return;
       var kHtml = '<div class="s-label">🔍 카카오맵</div>';
-      data.slice(0, 3).forEach(function(item) {
-        kHtml += '<div class="s-item" onclick="searchKakao(' + item.y + ',' + item.x + ')">'
-          + '<span style="font-size:16px">📍</span>'
-          + '<div><div class="s-name">' + item.place_name + '</div>'
-          + '<div class="s-sub">' + (item.address_name || '') + '</div></div></div>';
+      data.slice(0, 3).forEach(function(item, idx) {
+        var uid = 'ks' + Date.now() + idx;
+        kHtml += '<div class="s-item" style="justify-content:space-between" id="' + uid + '">'
+          + '<div style="display:flex;align-items:center;gap:9px;flex:1;min-width:0">'
+          + '<span style="font-size:16px;flex-shrink:0">📍</span>'
+          + '<div style="min-width:0"><div class="s-name" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + item.place_name + '</div>'
+          + '<div class="s-sub">' + (item.address_name || '') + '</div></div></div>'
+          + '<button class="ks-save-btn" style="flex-shrink:0;margin-left:8px;padding:5px 9px;background:var(--blue);color:#fff;border:none;border-radius:7px;font-size:11px;font-weight:700;cursor:pointer;font-family:inherit">+ 저장</button>'
+          + '</div>';
+        // 이벤트는 DOM에 추가된 후 별도로 붙임
+        window._ksItems = window._ksItems || {};
+        window._ksItems[uid] = { name: item.place_name, address: item.address_name || '', lat: item.y, lng: item.x };
       });
       var existing = dd.innerHTML.replace(/<div[^>]*>카카오맵에서 검색 중\.\.\.<\/div>/, '');
-      if (!existing.includes('카카오맵')) dd.innerHTML = existing + kHtml;
+      if (!existing.includes('카카오맵')) {
+        dd.innerHTML = existing + kHtml;
+        // 저장 버튼 이벤트 바인딩
+        dd.querySelectorAll('.ks-save-btn').forEach(function(btn) {
+          var row = btn.closest('.s-item');
+          var uid = row && row.id;
+          var item = uid && window._ksItems && window._ksItems[uid];
+          if (!item) return;
+          btn.addEventListener('click', function(e) {
+            e.stopPropagation();
+            fillFromSearch(item.name, item.address, item.lat, item.lng);
+          });
+        });
+      }
     }, { size: 3 });
   }
 }
@@ -911,6 +931,21 @@ function searchPlace(id) {
 function searchKakao(lat, lng) {
   hideSearch();
   if (kakaoMap) kakaoMap.setCenter(new window.kakao.maps.LatLng(lat, lng));
+}
+
+function fillFromSearch(name, address, lat, lng) {
+  hideSearch();
+  // 좌표 저장
+  pendingCoord = { lat: parseFloat(lat), lng: parseFloat(lng), kakao: true };
+  // 모달 열고 값 채우기
+  openModal();
+  setTimeout(function() {
+    document.getElementById('f-name').value = name;
+    document.getElementById('f-address').value = address;
+    document.getElementById('coord-val').textContent = parseFloat(lat).toFixed(5) + ', ' + parseFloat(lng).toFixed(5);
+    // 지도 이동
+    if (kakaoMap) kakaoMap.setCenter(new window.kakao.maps.LatLng(lat, lng));
+  }, 50);
 }
 
 // ── KAKAO MAP ──
