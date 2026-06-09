@@ -530,20 +530,75 @@ function renderKakaoMarkers(){
   if(!kakaoMap)return;
   kakaoMarkers.forEach(function(m){m.setMap(null);});
   kakaoMarkers=[];resetColors();
-  places.forEach(function(p){
-    if(!p.lat||!p.lng)return;
-    var pos=new window.kakao.maps.LatLng(p.lat,p.lng);
-    var c=pColor(p);
-    var el=document.createElement('div');
-    el.className='pin-bub';el.style.background=c;el.style.cursor='pointer';el.style.transition='transform .15s';
-    el.innerHTML='<span style="font-size:13px">'+(EMOJI[p.type]||'📍')+'</span><span>'+p.name+'</span>';
-    el.addEventListener('mouseenter',function(){el.style.transform='scale(1.1)';});
-    el.addEventListener('mouseleave',function(){el.style.transform='scale(1)';});
-    var ov=new window.kakao.maps.CustomOverlay({position:pos,content:el,yAnchor:1.4});
-    ov.setMap(kakaoMap);
-    (function(pl,col){el.addEventListener('click',function(){showKakaoPopup(pl);});})(p,c);
-    kakaoMarkers.push(ov);
-  });
+
+  var level=kakaoMap.getLevel();
+
+  if(level>=6){
+    // 축소 시 동네별 클러스터로 표시
+    var clusters={};
+    places.forEach(function(p){
+      if(!p.lat||!p.lng)return;
+      var key=p.dong||'기타';
+      if(!clusters[key])clusters[key]={count:0,lat:0,lng:0,color:pColor(p)};
+      clusters[key].count++;
+      clusters[key].lat+=p.lat;
+      clusters[key].lng+=p.lng;
+    });
+    Object.keys(clusters).forEach(function(dong){
+      var cl=clusters[dong];
+      var avgLat=cl.lat/cl.count;
+      var avgLng=cl.lng/cl.count;
+      var pos=new window.kakao.maps.LatLng(avgLat,avgLng);
+      var c=cl.color;
+      var el=document.createElement('div');
+      el.style.cssText=[
+        'display:flex','flex-direction:column','align-items:center','cursor:pointer'
+      ].join(';');
+      el.innerHTML=
+        '<div style="'
+        +'width:42px;height:42px;border-radius:50%;'
+        +'background:'+c+';'
+        +'border:3px solid white;'
+        +'box-shadow:0 2px 10px rgba(0,0,0,.25);'
+        +'display:flex;align-items:center;justify-content:center;'
+        +'font-size:16px;font-weight:800;color:white;font-family:Pretendard,sans-serif'
+        +'">'+cl.count+'</div>'
+        +'<div style="'
+        +'margin-top:4px;background:'+c+';color:white;'
+        +'padding:2px 8px;border-radius:20px;'
+        +'font-size:11px;font-weight:700;font-family:Pretendard,sans-serif;'
+        +'white-space:nowrap;box-shadow:0 1px 4px rgba(0,0,0,.2)'
+        +'">'+dong+'</div>';
+      el.addEventListener('mouseenter',function(){el.style.transform='scale(1.1)';});
+      el.addEventListener('mouseleave',function(){el.style.transform='scale(1)';});
+      (function(d,lat,lng){
+        el.addEventListener('click',function(){
+          // 클릭하면 해당 동네로 확대
+          kakaoMap.setCenter(new window.kakao.maps.LatLng(lat,lng));
+          kakaoMap.setLevel(4);
+        });
+      })(dong,avgLat,avgLng);
+      var ov=new window.kakao.maps.CustomOverlay({position:pos,content:el,yAnchor:1.2});
+      ov.setMap(kakaoMap);
+      kakaoMarkers.push(ov);
+    });
+  } else {
+    // 확대 시 개별 핀 표시
+    places.forEach(function(p){
+      if(!p.lat||!p.lng)return;
+      var pos=new window.kakao.maps.LatLng(p.lat,p.lng);
+      var c=pColor(p);
+      var el=document.createElement('div');
+      el.className='pin-bub';el.style.background=c;el.style.cursor='pointer';el.style.transition='transform .15s';
+      el.innerHTML='<span style="font-size:13px">'+(EMOJI[p.type]||'📍')+'</span><span>'+p.name+'</span>';
+      el.addEventListener('mouseenter',function(){el.style.transform='scale(1.1)';});
+      el.addEventListener('mouseleave',function(){el.style.transform='scale(1)';});
+      var ov=new window.kakao.maps.CustomOverlay({position:pos,content:el,yAnchor:1.4});
+      ov.setMap(kakaoMap);
+      (function(pl){el.addEventListener('click',function(){showKakaoPopup(pl);});})(p);
+      kakaoMarkers.push(ov);
+    });
+  }
   updateLegend();
 }
 function showKakaoPopup(p){
@@ -739,6 +794,10 @@ function initKakaoMap(){
   window.kakao.maps.event.addListener(kakaoMap,'click',function(e){
     var ll=e.latLng;pendingCoord={lat:ll.getLat(),lng:ll.getLng(),kakao:true};
     document.getElementById('coord-val').textContent=ll.getLat().toFixed(5)+', '+ll.getLng().toFixed(5);
+  });
+  // 줌 변경 시 클러스터 ↔ 핀 자동 전환
+  window.kakao.maps.event.addListener(kakaoMap,'zoom_changed',function(){
+    renderKakaoMarkers();
   });
   renderKakaoMarkers();
 }
