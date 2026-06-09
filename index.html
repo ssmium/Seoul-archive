@@ -466,6 +466,75 @@
   }
   .config-note { font-size: 11px; color: var(--sub); margin-top: 8px; line-height: 1.5; }
 
+  /* COLOR SWATCH */
+  .color-swatch {
+    width: 32px; height: 32px;
+    border-radius: 8px;
+    cursor: pointer;
+    border: 2px solid transparent;
+    transition: transform 0.15s, border-color 0.15s;
+    flex-shrink: 0;
+  }
+  .color-swatch:hover { transform: scale(1.15); }
+  .color-swatch.active { border-color: var(--text) !important; transform: scale(1.15); }
+
+  /* SEARCH BAR */
+  .search-bar {
+    position: relative;
+    display: flex;
+    align-items: center;
+    background: var(--bg);
+    border: 1.5px solid var(--line);
+    border-radius: var(--radius-sm);
+    overflow: visible;
+    transition: border-color 0.15s;
+  }
+  .search-bar:focus-within { border-color: var(--blue); }
+  .search-bar input {
+    border: none; background: transparent;
+    padding: 7px 10px; font-size: 13px;
+    font-family: inherit; color: var(--text);
+    width: 180px; outline: none;
+  }
+  .search-bar button {
+    border: none; background: transparent;
+    padding: 7px 10px; cursor: pointer;
+    font-size: 14px; color: var(--sub);
+  }
+  .search-dropdown {
+    position: absolute;
+    top: calc(100% + 6px); left: 0; right: 0;
+    background: white;
+    border: 1px solid var(--line);
+    border-radius: var(--radius-sm);
+    box-shadow: var(--shadow-lg);
+    z-index: 200;
+    overflow: hidden;
+    min-width: 220px;
+  }
+  .search-dropdown.hidden { display: none; }
+  .search-item {
+    padding: 10px 14px;
+    cursor: pointer;
+    display: flex; align-items: center; gap: 10px;
+    transition: background 0.1s;
+    border-bottom: 1px solid var(--line);
+  }
+  .search-item:last-child { border-bottom: none; }
+  .search-item:hover { background: var(--blue-light); }
+  .search-item-dot {
+    width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0;
+  }
+  .search-item-name { font-size: 13px; font-weight: 600; }
+  .search-item-sub { font-size: 11px; color: var(--sub); }
+  .search-section-label {
+    padding: 6px 14px;
+    font-size: 11px; font-weight: 700;
+    color: var(--sub); letter-spacing: 0.05em;
+    background: var(--bg);
+    text-transform: uppercase;
+  }
+
   /* KAKAO KEY SETUP */
   .kakao-setup {
     position: fixed; inset: 0;
@@ -526,6 +595,11 @@
     <h1>서울 아카이브</h1>
   </div>
   <div class="topbar-actions">
+    <div class="search-bar" id="topbar-search">
+      <input type="text" id="search-input" placeholder="동네나 장소 검색..." autocomplete="off">
+      <button id="search-btn">🔍</button>
+      <div class="search-dropdown hidden" id="search-dropdown"></div>
+    </div>
     <div class="stat-chip" id="stat-chip">0곳 기록됨</div>
     <button class="btn-add" id="btn-add-place">
       <span>+</span> 장소 추가
@@ -645,6 +719,22 @@
         <div class="form-label">주소 <span style="font-size:11px;color:var(--sub);font-weight:400">(입력하면 지도에 정확히 핀이 찍혀요)</span></div>
         <input type="text" class="form-input" id="input-address" placeholder="예: 마포구 와우산로 123">
       </div>
+      <!-- Color -->
+      <div class="form-group">
+        <div class="form-label">핀 색상 <span style="font-size:11px;color:var(--sub);font-weight:400">(동네별 자동 지정 또는 직접 선택)</span></div>
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;" id="color-picker">
+          <div class="color-swatch active" data-color="" style="background:linear-gradient(135deg,#3182F6,#E03030,#1A7F3C);border:2px solid var(--blue);" title="자동"></div>
+          <div class="color-swatch" data-color="#3182F6" style="background:#3182F6;" title="파랑"></div>
+          <div class="color-swatch" data-color="#E03030" style="background:#E03030;" title="빨강"></div>
+          <div class="color-swatch" data-color="#1A7F3C" style="background:#1A7F3C;" title="초록"></div>
+          <div class="color-swatch" data-color="#E07A00" style="background:#E07A00;" title="주황"></div>
+          <div class="color-swatch" data-color="#7B3FC4" style="background:#7B3FC4;" title="보라"></div>
+          <div class="color-swatch" data-color="#0891B2" style="background:#0891B2;" title="하늘"></div>
+          <div class="color-swatch" data-color="#BE185D" style="background:#BE185D;" title="핑크"></div>
+          <div class="color-swatch" data-color="#191F28" style="background:#191F28;" title="블랙"></div>
+          <input type="color" id="input-color-custom" value="#3182F6" style="width:32px;height:32px;border:2px solid var(--line);border-radius:8px;cursor:pointer;padding:2px;" title="직접 선택">
+        </div>
+      </div>
       <!-- Photo -->
       <div class="form-group">
         <div class="form-label">사진</div>
@@ -701,6 +791,7 @@
 <script>
 // ======= STATE =======
 let places = [];
+let selectedColor = ''; // 빈 문자열 = 자동
 let activeFilter = 'all';
 let selectedType = 'cafe';
 let pendingCoord = null;
@@ -956,9 +1047,13 @@ function resetForm() {
   document.getElementById('photo-placeholder').style.display = 'block';
   photoDataUrl = null;
   selectedType = 'cafe';
+  selectedColor = '';
   document.querySelectorAll('.type-btn').forEach(b => {
     b.classList.toggle('active', b.dataset.type === 'cafe');
   });
+  document.querySelectorAll('.color-swatch').forEach(s => s.classList.remove('active'));
+  const autoSwatch = document.querySelector('.color-swatch[data-color=""]');
+  if (autoSwatch) autoSwatch.classList.add('active');
   pendingCoord = null;
 }
 
@@ -980,6 +1075,20 @@ document.querySelectorAll('.type-btn').forEach(btn => {
     document.querySelectorAll('.type-btn').forEach(b => b.classList.remove('active'));
     btn.classList.add('active');
   });
+});
+
+// Color picker
+document.getElementById('color-picker').addEventListener('click', function(e) {
+  const swatch = e.target.closest('.color-swatch');
+  if (!swatch) return;
+  document.querySelectorAll('.color-swatch').forEach(s => s.classList.remove('active'));
+  swatch.classList.add('active');
+  selectedColor = swatch.dataset.color || '';
+});
+
+document.getElementById('input-color-custom').addEventListener('input', function() {
+  selectedColor = this.value;
+  document.querySelectorAll('.color-swatch').forEach(s => s.classList.remove('active'));
 });
 
 // Photo upload
@@ -1046,6 +1155,7 @@ document.getElementById('btn-submit').addEventListener('click', async function()
     id: Date.now().toString(),
     name: name,
     type: selectedType,
+    color: selectedColor || '',
     dong: dong,
     address: address,
     memo: document.getElementById('input-memo').value.trim(),
@@ -1209,7 +1319,7 @@ function renderKakaoMarkers() {
   places.forEach(function(p) {
     if (!p.lat || !p.lng) return;
     var pos = new window.kakao.maps.LatLng(p.lat, p.lng);
-    var color = getDongColor(p.dong);
+    var color = p.color || getDongColor(p.dong);
     var emoji = getTypeEmoji(p.type);
 
     // 핀 엘리먼트
@@ -1332,6 +1442,178 @@ document.getElementById('kakao-setup-btn').addEventListener('click', async funct
 
 document.getElementById('kakao-skip-btn').addEventListener('click', function() {
   document.getElementById('kakao-setup').classList.add('hidden');
+});
+
+// ======= SEARCH =======
+var searchInput = document.getElementById('search-input');
+var searchDropdown = document.getElementById('search-dropdown');
+
+function getDongColor2(dong) {
+  // renderKakaoMarkers의 DONG_COLORS 재활용
+  return DONG_COLORS[dong] || '#3182F6';
+}
+
+function doSearch(query) {
+  query = query.trim();
+  if (!query) { searchDropdown.classList.add('hidden'); return; }
+
+  var q = query.toLowerCase();
+
+  // 1. 내 기록에서 동네/장소명 검색
+  var myDongs = [];
+  var myPlaces = [];
+  var seenDongs = {};
+
+  places.forEach(function(p) {
+    if (p.dong && p.dong.toLowerCase().includes(q) && !seenDongs[p.dong]) {
+      seenDongs[p.dong] = true;
+      myDongs.push(p);
+    }
+    if (p.name && p.name.toLowerCase().includes(q)) {
+      myPlaces.push(p);
+    }
+  });
+
+  var html = '';
+
+  // 내 기록 동네
+  if (myDongs.length) {
+    html += '<div class="search-section-label">📍 내 기록 동네</div>';
+    myDongs.slice(0, 4).forEach(function(p) {
+      var color = getDongColor2(p.dong);
+      var count = places.filter(function(x) { return x.dong === p.dong; }).length;
+      html += '<div class="search-item" onclick="searchGoToDong(&quot;' + p.dong + '&quot;)">'
+        + '<div class="search-item-dot" style="background:' + color + '"></div>'
+        + '<div><div class="search-item-name">' + p.dong + '</div>'
+        + '<div class="search-item-sub">' + count + '곳 기록됨</div></div>'
+        + '</div>';
+    });
+  }
+
+  // 내 기록 장소
+  if (myPlaces.length) {
+    html += '<div class="search-section-label">🗺 내 기록 장소</div>';
+    myPlaces.slice(0, 3).forEach(function(p) {
+      var emoji = {cafe:'☕',shop:'🛍',dong:'🏘',etc:'📌'}[p.type] || '📍';
+      html += '<div class="search-item" onclick="searchGoToPlace(&quot;' + p.id + '&quot;)">'
+        + '<span style="font-size:16px">' + emoji + '</span>'
+        + '<div><div class="search-item-name">' + p.name + '</div>'
+        + '<div class="search-item-sub">' + (p.dong || '') + '</div></div>'
+        + '</div>';
+    });
+  }
+
+  // 카카오맵 검색 (연결됐을 때)
+  if (kakaoMap && window.kakao && window.kakao.maps && window.kakao.maps.services) {
+    var ps = new window.kakao.maps.services.Places();
+    ps.keywordSearch('서울 ' + query, function(data, status) {
+      if (status === window.kakao.maps.services.Status.OK && data.length) {
+        var kakaoHtml = '<div class="search-section-label">🔍 카카오맵 검색</div>';
+        data.slice(0, 3).forEach(function(item) {
+          kakaoHtml += '<div class="search-item" onclick="searchGoToKakao(' + item.y + ',' + item.x + ',&quot;' + item.place_name.replace(/'/g, '').replace(/"/g, '') + '&quot;)">'
+            + '<span style="font-size:16px">📍</span>'
+            + '<div><div class="search-item-name">' + item.place_name + '</div>'
+            + '<div class="search-item-sub">' + (item.address_name || '') + '</div></div>'
+            + '</div>';
+        });
+        // 기존 내용에 카카오 결과 추가
+        var existing = searchDropdown.innerHTML;
+        if (!existing.includes('카카오맵 검색')) {
+          searchDropdown.innerHTML = existing + kakaoHtml;
+        }
+      }
+    }, { size: 3 });
+  }
+
+  if (!html && !kakaoMap) {
+    html = '<div class="search-item" style="color:var(--sub);cursor:default;">검색 결과 없음</div>';
+  }
+
+  searchDropdown.innerHTML = html || '<div style="padding:10px 14px;font-size:13px;color:var(--sub)">카카오맵에서 검색 중...</div>';
+  searchDropdown.classList.remove('hidden');
+}
+
+function searchGoToDong(dong) {
+  searchDropdown.classList.add('hidden');
+  searchInput.value = dong;
+
+  // 사이드바 필터
+  activeFilter = 'all';
+  document.querySelectorAll('.filter-tab').forEach(function(t) { t.classList.remove('active'); });
+  document.querySelector('.filter-tab[data-filter="all"]').classList.add('active');
+
+  // 해당 동네 장소들로 필터링해서 첫 번째 장소로 이동
+  var targets = places.filter(function(p) { return p.dong === dong && p.lat && p.lng; });
+  if (targets.length && kakaoMap) {
+    if (targets.length === 1) {
+      kakaoMap.setCenter(new window.kakao.maps.LatLng(targets[0].lat, targets[0].lng));
+      kakaoMap.setLevel(4);
+    } else {
+      // 여러 개면 bounds로 맞춤
+      var bounds = new window.kakao.maps.LatLngBounds();
+      targets.forEach(function(p) { bounds.extend(new window.kakao.maps.LatLng(p.lat, p.lng)); });
+      kakaoMap.setBounds(bounds, 80);
+    }
+  } else if (kakaoMap) {
+    // 좌표 없으면 카카오로 동네 검색
+    var ps = new window.kakao.maps.services.Places();
+    ps.keywordSearch('서울 ' + dong, function(data, status) {
+      if (status === window.kakao.maps.services.Status.OK && data.length) {
+        kakaoMap.setCenter(new window.kakao.maps.LatLng(data[0].y, data[0].x));
+        kakaoMap.setLevel(5);
+      }
+    }, { size: 1 });
+  }
+
+  // 사이드바에서 해당 동네 카드 하이라이트
+  renderSidebar();
+  setTimeout(function() {
+    var firstCard = document.querySelector('.place-card');
+    if (firstCard) firstCard.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }, 100);
+}
+
+function searchGoToPlace(id) {
+  searchDropdown.classList.add('hidden');
+  var p = places.find(function(x) { return x.id === id; });
+  if (!p) return;
+  searchInput.value = p.name;
+  if (kakaoMap && p.lat && p.lng) {
+    kakaoMap.setCenter(new window.kakao.maps.LatLng(p.lat, p.lng));
+    kakaoMap.setLevel(3);
+    setTimeout(function() { showKakaoPopup(p); }, 200);
+  }
+}
+
+function searchGoToKakao(lat, lng, name) {
+  searchDropdown.classList.add('hidden');
+  searchInput.value = name.replace(/&quot;/g, '"');
+  if (kakaoMap) {
+    kakaoMap.setCenter(new window.kakao.maps.LatLng(lat, lng));
+    kakaoMap.setLevel(4);
+  }
+}
+
+// 검색 이벤트
+var searchTimer;
+searchInput.addEventListener('input', function() {
+  clearTimeout(searchTimer);
+  searchTimer = setTimeout(function() { doSearch(searchInput.value); }, 250);
+});
+
+searchInput.addEventListener('keydown', function(e) {
+  if (e.key === 'Enter') { doSearch(searchInput.value); }
+  if (e.key === 'Escape') { searchDropdown.classList.add('hidden'); }
+});
+
+document.getElementById('search-btn').addEventListener('click', function() {
+  doSearch(searchInput.value);
+});
+
+document.addEventListener('click', function(e) {
+  if (!e.target.closest('#topbar-search')) {
+    searchDropdown.classList.add('hidden');
+  }
 });
 
 // ======= INIT =======
