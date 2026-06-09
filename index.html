@@ -868,14 +868,13 @@ function doSearch(query) {
       var kHtml = '<div class="s-label">🔍 카카오맵</div>';
       data.slice(0, 3).forEach(function(item, idx) {
         var uid = 'ks' + Date.now() + idx;
-        kHtml += '<div class="s-item" style="justify-content:space-between" id="' + uid + '">'
-          + '<div style="display:flex;align-items:center;gap:9px;flex:1;min-width:0">'
+        kHtml += '<div class="s-item" id="' + uid + '">'
           + '<span style="font-size:16px;flex-shrink:0">📍</span>'
-          + '<div style="min-width:0"><div class="s-name" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + item.place_name + '</div>'
-          + '<div class="s-sub">' + (item.address_name || '') + '</div></div></div>'
-          + '<button class="ks-save-btn" style="flex-shrink:0;margin-left:8px;padding:5px 9px;background:var(--blue);color:#fff;border:none;border-radius:7px;font-size:11px;font-weight:700;cursor:pointer;font-family:inherit">+ 저장</button>'
+          + '<div style="min-width:0;flex:1">'
+          + '<div class="s-name" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + item.place_name + '</div>'
+          + '<div class="s-sub">' + (item.address_name || '') + '</div></div>'
+          + '<span style="font-size:11px;font-weight:700;color:var(--blue);flex-shrink:0;margin-left:6px">저장 →</span>'
           + '</div>';
-        // 이벤트는 DOM에 추가된 후 별도로 붙임
         window._ksItems = window._ksItems || {};
         window._ksItems[uid] = { name: item.place_name, address: item.address_name || '', lat: item.y, lng: item.x };
       });
@@ -883,14 +882,12 @@ function doSearch(query) {
       if (!existing.includes('카카오맵')) {
         dd.innerHTML = existing + kHtml;
         // 저장 버튼 이벤트 바인딩
-        dd.querySelectorAll('.ks-save-btn').forEach(function(btn) {
-          var row = btn.closest('.s-item');
-          var uid = row && row.id;
+        dd.querySelectorAll('[id^="ks"]').forEach(function(row) {
+          var uid = row.id;
           var item = uid && window._ksItems && window._ksItems[uid];
           if (!item) return;
-          btn.addEventListener('click', function(e) {
-            e.stopPropagation();
-            fillFromSearch(item.name, item.address, item.lat, item.lng);
+          row.addEventListener('click', function() {
+            searchKakao(item.lat, item.lng, item.name, item.address);
           });
         });
       }
@@ -928,9 +925,21 @@ function searchPlace(id) {
   document.getElementById('search-input').value = p.name;
   focusPlace(id);
 }
-function searchKakao(lat, lng) {
+function searchKakao(lat, lng, name, address) {
   hideSearch();
-  if (kakaoMap) kakaoMap.setCenter(new window.kakao.maps.LatLng(lat, lng));
+  document.getElementById('search-input').value = '';
+  if (kakaoMap) {
+    kakaoMap.setCenter(new window.kakao.maps.LatLng(lat, lng));
+    kakaoMap.setLevel(3);
+  }
+  // 좌표 저장 후 모달 자동 오픈
+  pendingCoord = { lat: parseFloat(lat), lng: parseFloat(lng), kakao: true };
+  openModal();
+  setTimeout(function() {
+    if (name) document.getElementById('f-name').value = name;
+    if (address) document.getElementById('f-address').value = address;
+    document.getElementById('coord-val').textContent = parseFloat(lat).toFixed(5) + ', ' + parseFloat(lng).toFixed(5);
+  }, 50);
 }
 
 function fillFromSearch(name, address, lat, lng) {
