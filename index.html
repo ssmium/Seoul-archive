@@ -345,10 +345,18 @@ function lsSave(){
   localStorage.setItem('seoul_archive',JSON.stringify(places));
 }
 async function loadPlaces(){
-  if(SB_READY){
-    try{var r=await sbFetch('GET','/rest/v1/places?select=*&order=created_at.desc');if(r.ok){places=await r.json();return;}}catch(e){}
-  }
+  // 항상 localStorage 먼저 읽기 (즉시 표시)
   lsLoad();
+  // Supabase 연결됐으면 클라우드 데이터로 덮어쓰기
+  if(SB_READY){
+    try{
+      var r=await sbFetch('GET','/rest/v1/places?select=*&order=created_at.desc');
+      if(r.ok){
+        var data=await r.json();
+        if(data&&data.length){places=data;lsSave();} // 클라우드 데이터를 localStorage에도 동기화
+      }
+    }catch(e){}
+  }
 }
 async function savePlaces(){
   lsSave(); // 항상 localStorage에 먼저 저장
