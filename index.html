@@ -520,7 +520,7 @@
 (function(){
   var key = localStorage.getItem('kakao_js_key');
   if(key){
-    document.write('<scr'+'ipt type="text/javascript" src="//dapi.kakao.com/v2/maps/sdk.js?appkey='+key+'"><\/scr'+'ipt>');
+    document.write('<scr'+'ipt type="text/javascript" src="//dapi.kakao.com/v2/maps/sdk.js?appkey='+key+'&libraries=services"><\/scr'+'ipt>');
   }
 })();
 </script>
@@ -896,10 +896,11 @@ function focusPlace(id) {
 }
 
 function deletePlace(id) {
-  places = places.filter(p => p.id !== id);
+  places = places.filter(function(p) { return p.id !== id; });
   savePlaces();
   renderSidebar();
   renderPins();
+  if (kakaoMap) renderKakaoMarkers();
 }
 
 // ======= MAP CLICK =======
@@ -996,11 +997,12 @@ document.getElementById('btn-submit').addEventListener('click', () => {
     return;
   }
 
-  const place = {
+  const dong = document.getElementById('input-dong').value.trim();
+  const placeData = {
     id: Date.now().toString(),
     name,
     type: selectedType,
-    dong: document.getElementById('input-dong').value.trim(),
+    dong: dong,
     memo: document.getElementById('input-memo').value.trim(),
     url: document.getElementById('input-url').value.trim(),
     date: document.getElementById('input-date').value,
@@ -1011,19 +1013,42 @@ document.getElementById('btn-submit').addEventListener('click', () => {
     lng: (pendingCoord && pendingCoord.kakao) ? pendingCoord.lng : null,
   };
 
-  places.unshift(place);
-  savePlaces();
-  renderSidebar();
-  renderPins();
-  if (kakaoMap) renderKakaoMarkers();
-  closeModal();
+  // 카카오맵이 연결됐고 좌표가 없으면 장소명+동네로 자동 geocoding
+  async function saveWithGeocode() {
+    if (kakaoMap && !placeData.lat && window.kakao && window.kakao.maps && window.kakao.maps.services) {
+      const geocoder = new window.kakao.maps.services.Places();
+      const query = (dong ? dong + ' ' : '서울 ') + name;
+      await new Promise(function(resolve) {
+        geocoder.keywordSearch(query, function(result, status) {
+          if (status === window.kakao.maps.services.Status.OK && result.length > 0) {
+            placeData.lat = parseFloat(result[0].y);
+            placeData.lng = parseFloat(result[0].x);
+            placeData.x = 400; placeData.y = 250; // fallback coords
+          }
+          resolve();
+        }, { size: 1 });
+      });
+    }
 
-  // Show popup for new pin
-  setTimeout(() => {
-    const svg = document.getElementById('map-svg');
-    const rect = svg.getBoundingClientRect();
-    showPopup(place.id, place.x * rect.width / 800, place.y * rect.height / 600);
-  }, 100);
+    places.unshift(placeData);
+    savePlaces();
+    renderSidebar();
+    renderPins();
+    if (kakaoMap) renderKakaoMarkers();
+    closeModal();
+
+    if (kakaoMap && placeData.lat && placeData.lng) {
+      setTimeout(function() { showKakaoPopup(placeData); }, 200);
+    } else if (!kakaoMap && placeData.x) {
+      setTimeout(function() {
+        const svg = document.getElementById('map-svg');
+        const rect = svg.getBoundingClientRect();
+        showPopup(placeData.id, placeData.x * rect.width / 800, placeData.y * rect.height / 600);
+      }, 100);
+    }
+  }
+
+  saveWithGeocode();
 });
 
 // Filter tabs
@@ -1070,7 +1095,7 @@ function loadKakaoScript(apiKey) {
     document.querySelectorAll('script[src*="dapi.kakao.com"]').forEach(s => s.remove());
     const script = document.createElement('script');
     script.type = 'text/javascript';
-    script.src = '//dapi.kakao.com/v2/maps/sdk.js?appkey=' + apiKey;
+    script.src = '//dapi.kakao.com/v2/maps/sdk.js?appkey=' + apiKey + '&libraries=services';
     const timer = setTimeout(() => reject(new Error('timeout')), 10000);
     script.onload = function() {
       clearTimeout(timer);
