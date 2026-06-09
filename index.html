@@ -595,6 +595,7 @@
       </div>
     </div>
     <div class="map-notice" id="map-notice">
+  <div id="map-click-notice" style="display:none;position:absolute;bottom:16px;left:50%;transform:translateX(-50%);background:var(--text);color:white;padding:8px 16px;border-radius:20px;font-size:12px;font-weight:600;white-space:nowrap;z-index:20;"></div>
       📍 지도를 클릭해서 장소를 찍어보세요 &nbsp;·&nbsp; <a href="https://developers.kakao.com/console/app" target="_blank">카카오맵 API 연결하기 →</a>
     </div>
   </div>
@@ -677,7 +678,7 @@
       <div class="form-group">
         <div class="form-label">위치</div>
         <div class="map-click-hint">
-          🗺 저장 후 지도에서 핀 위치를 드래그해서 조정할 수 있어요
+          🗺 주소를 입력하면 자동으로 정확한 위치에 핀이 찍혀요
         </div>
         <div class="coord-display" id="coord-display">지도를 클릭하면 좌표가 자동으로 잡혀요</div>
       </div>
@@ -787,9 +788,24 @@ function renderSidebar() {
         <div class="place-date">${p.date || ''}</div>
         ${blogBtn}
       </div>
+      <div class="place-card-actions" id="card-actions-${p.id}" style="display:none;margin-top:10px;padding-top:10px;border-top:1px solid var(--line);gap:8px;display:none;flex-direction:row;">
+        <button onclick="event.stopPropagation();deletePlace('${p.id}')" style="flex:1;padding:8px;background:#FFF0F0;color:#E03030;border:none;border-radius:8px;font-size:12px;font-weight:600;font-family:inherit;cursor:pointer;">🗑 삭제</button>
+        ${p.url ? `<a href="${p.url}" target="_blank" onclick="event.stopPropagation()" style="flex:1;padding:8px;background:var(--blue-light);color:var(--blue);border:none;border-radius:8px;font-size:12px;font-weight:600;font-family:inherit;cursor:pointer;text-align:center;text-decoration:none;">✍ 포스팅</a>` : ''}
+      </div>
     `;
     card.addEventListener('click', (e) => {
-      if (e.target.closest('a')) return;
+      if (e.target.closest('a') || e.target.closest('button')) return;
+      // 액션 패널 토글
+      const actions = card.querySelector('.place-card-actions');
+      const isOpen = actions && actions.style.display === 'flex';
+      // 다른 카드 액션 닫기
+      document.querySelectorAll('.place-card-actions').forEach(a => a.style.display = 'none');
+      document.querySelectorAll('.place-card').forEach(c => c.classList.remove('active'));
+      if (!isOpen && actions) {
+        actions.style.display = 'flex';
+        card.classList.add('active');
+      }
+      // 지도에서 포커스
       focusPlace(p.id);
     });
     list.appendChild(card);
@@ -914,9 +930,7 @@ document.getElementById('map-svg').addEventListener('click', (e) => {
   pendingCoord = { x, y };
   document.getElementById('coord-display').textContent =
     `x: ${Math.round(x)}, y: ${Math.round(y)} (서울 지도 좌표)`;
-
-  // Open modal
-  openModal();
+  // 모달은 + 버튼으로만 열기
 });
 
 document.getElementById('map-fallback').addEventListener('click', (e) => {
@@ -1136,7 +1150,14 @@ function initKakaoMap() {
     pendingCoord = { lat: ll.getLat(), lng: ll.getLng(), kakao: true };
     document.getElementById('coord-display').textContent =
       ll.getLat().toFixed(5) + ', ' + ll.getLng().toFixed(5);
-    openModal();
+    // 지도 클릭 시 좌표만 저장, 모달은 + 버튼으로만 열기
+    // 시각적 피드백
+    const notice = document.getElementById('map-click-notice');
+    if (notice) {
+      notice.textContent = '📍 위치 선택됨 — 위에서 장소 추가 버튼을 눌러주세요';
+      notice.style.display = 'block';
+      setTimeout(function() { notice.style.display = 'none'; }, 2500);
+    }
   });
 
   renderKakaoMarkers();
