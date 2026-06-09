@@ -448,6 +448,7 @@ function renderSidebar(){
       +(p.dong?'<span class="ptag">'+p.dong+'</span>':'')+'</div></div></div>'
       +'<div class="pc-bottom"><div class="pdate">'+(p.date||'')+'</div>'+blog+'</div>'
       +'<div class="pc-acts" id="acts-'+p.id+'">'
+      +'<button class="pact" style="background:#EBF3FE;color:#3182F6" onclick="event.stopPropagation();openEditModal(\''+p.id+'\')">✏️ 수정</button>'
       +'<button class="pact pact-del" onclick="event.stopPropagation();deletePlace(\''+p.id+'\')">🗑 삭제</button>'
       +blogAct+'</div>';
     card.addEventListener('click',function(e){
@@ -513,7 +514,10 @@ function showSvgPopup(id,x,y){
     +(p.memo?'<div class="pp-memo">'+p.memo+'</div>':'')
     +'<div class="pp-acts">'
     +(p.url?'<button class="pp-btn pp-primary" onclick="window.open(\''+p.url+'\',\'_blank\')">✍ 포스팅</button>':'')
-    +'<button class="pp-btn pp-danger" onclick="deletePlace(\''+p.id+'\');closePopup()">🗑 삭제</button>'
+    +'</div>'
+    +'<div style="display:flex;gap:6px;margin-top:7px">'
+    +'<button class="pp-btn" style="flex:1;background:#EBF3FE;color:#3182F6" onclick="closePopup();openEditModal(\''+p.id+'\');">✏️ 수정</button>'
+    +'<button class="pp-btn pp-danger" style="flex:1" onclick="deletePlace(\''+p.id+'\');closePopup()">🗑 삭제</button>'
     +'</div></div>';
   pl.appendChild(popup);
   document.getElementById('pc').addEventListener('click',closePopup);
@@ -607,7 +611,10 @@ function showKakaoPopup(p){
   var pos=new window.kakao.maps.LatLng(p.lat,p.lng);
   var img=p.photo?'<img src="'+p.photo+'" style="width:100%;height:110px;object-fit:cover;border-radius:8px;margin-bottom:10px">':'';
   var blog=p.url?'<a href="'+p.url+'" target="_blank" style="font-size:12px;color:'+c+';font-weight:600;display:block;margin-top:5px">✍ 포스팅 →</a>':'';
-  var del='<button onclick="deletePlace(\''+p.id+'\');if(window._kIW)window._kIW.close();" style="display:block;width:100%;margin-top:6px;padding:6px;background:#FFF0F0;color:#E03030;border:none;border-radius:7px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit">🗑 삭제</button>';
+  var del='<div style="display:flex;gap:7px;margin-top:8px">'
+    +'<button onclick="if(window._kIW)window._kIW.close();openEditModal(\''+p.id+'\');" style="flex:1;padding:9px;background:#EBF3FE;color:#3182F6;border:none;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit">✏️ 수정</button>'
+    +'<button onclick="deletePlace(\''+p.id+'\');if(window._kIW)window._kIW.close();" style="flex:1;padding:9px;background:#FFF0F0;color:#E03030;border:none;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit">🗑 삭제</button>'
+    +'</div>';
   var iw=new window.kakao.maps.InfoWindow({
     position:pos,removable:true,
     content:'<div style="padding:14px;min-width:220px;max-width:260px;font-family:Pretendard,sans-serif">'+img
