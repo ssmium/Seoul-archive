@@ -1004,68 +1004,84 @@ document.getElementById('input-photo').addEventListener('change', (e) => {
 });
 
 // Submit
-document.getElementById('btn-submit').addEventListener('click', () => {
+document.getElementById('btn-submit').addEventListener('click', async function() {
   const name = document.getElementById('input-name').value.trim();
   if (!name) {
     document.getElementById('input-name').focus();
     document.getElementById('input-name').style.borderColor = '#E03030';
-    setTimeout(() => document.getElementById('input-name').style.borderColor = '', 1500);
+    setTimeout(function() { document.getElementById('input-name').style.borderColor = ''; }, 1500);
     return;
   }
 
   const dong = document.getElementById('input-dong').value.trim();
-  const placeData = {
+  const address = document.getElementById('input-address').value.trim();
+
+  // 버튼 비활성화 (중복 저장 방지)
+  const btn = document.getElementById('btn-submit');
+  btn.textContent = '검색 중...';
+  btn.disabled = true;
+
+  var lat = null, lng = null;
+
+  // pendingCoord에 kakao 좌표가 있으면 우선 사용
+  if (pendingCoord && pendingCoord.kakao) {
+    lat = pendingCoord.lat;
+    lng = pendingCoord.lng;
+  }
+
+  // 좌표 없으면 주소/장소명으로 geocoding
+  if (!lat && kakaoMap && window.kakao && window.kakao.maps && window.kakao.maps.services) {
+    var query = address || (dong ? dong + ' ' + name : '서울 ' + name);
+    var result = await new Promise(function(resolve) {
+      var ps = new window.kakao.maps.services.Places();
+      ps.keywordSearch(query, function(data, status) {
+        if (status === window.kakao.maps.services.Status.OK && data.length > 0) {
+          resolve({ lat: parseFloat(data[0].y), lng: parseFloat(data[0].x) });
+        } else {
+          resolve(null);
+        }
+      }, { size: 1 });
+    });
+    if (result) {
+      lat = result.lat;
+      lng = result.lng;
+    }
+  }
+
+  var place = {
     id: Date.now().toString(),
-    name,
+    name: name,
     type: selectedType,
     dong: dong,
+    address: address,
     memo: document.getElementById('input-memo').value.trim(),
     url: document.getElementById('input-url').value.trim(),
     date: document.getElementById('input-date').value,
     photo: photoDataUrl || null,
+    lat: lat,
+    lng: lng,
     x: (pendingCoord && !pendingCoord.kakao) ? pendingCoord.x : 400,
     y: (pendingCoord && !pendingCoord.kakao) ? pendingCoord.y : 250,
-    lat: (pendingCoord && pendingCoord.kakao) ? pendingCoord.lat : null,
-    lng: (pendingCoord && pendingCoord.kakao) ? pendingCoord.lng : null,
   };
 
-  // 카카오맵이 연결됐고 좌표가 없으면 장소명+동네로 자동 geocoding
-  async function saveWithGeocode() {
-    if (kakaoMap && !placeData.lat && window.kakao && window.kakao.maps && window.kakao.maps.services) {
-      const geocoder = new window.kakao.maps.services.Places();
-      const address = document.getElementById('input-address').value.trim();
-    const query = address ? address : (dong ? dong + ' ' : '서울 ') + name;
-      await new Promise(function(resolve) {
-        geocoder.keywordSearch(query, function(result, status) {
-          if (status === window.kakao.maps.services.Status.OK && result.length > 0) {
-            placeData.lat = parseFloat(result[0].y);
-            placeData.lng = parseFloat(result[0].x);
-            placeData.x = 400; placeData.y = 250; // fallback coords
-          }
-          resolve();
-        }, { size: 1 });
-      });
-    }
-
-    places.unshift(placeData);
-    savePlaces();
-    renderSidebar();
-    renderPins();
-    if (kakaoMap) renderKakaoMarkers();
-    closeModal();
-
-    if (kakaoMap && placeData.lat && placeData.lng) {
-      setTimeout(function() { showKakaoPopup(placeData); }, 200);
-    } else if (!kakaoMap && placeData.x) {
+  places.unshift(place);
+  savePlaces();
+  renderSidebar();
+  if (kakaoMap) {
+    renderKakaoMarkers();
+    if (lat && lng) {
       setTimeout(function() {
-        const svg = document.getElementById('map-svg');
-        const rect = svg.getBoundingClientRect();
-        showPopup(placeData.id, placeData.x * rect.width / 800, placeData.y * rect.height / 600);
-      }, 100);
+        kakaoMap.setCenter(new window.kakao.maps.LatLng(lat, lng));
+        showKakaoPopup(place);
+      }, 200);
     }
+  } else {
+    renderPins();
   }
 
-  saveWithGeocode();
+  btn.textContent = '저장하기';
+  btn.disabled = false;
+  closeModal();
 });
 
 // Filter tabs
