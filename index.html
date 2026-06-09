@@ -227,7 +227,7 @@ body{font-family:'Pretendard',-apple-system,sans-serif;background:var(--bg);colo
 <div class="overlay" id="overlay">
   <div class="modal">
     <div class="modal-head">
-      <div class="modal-title">장소 기록하기</div>
+      <div class="modal-title" id="modal-title-text">장소 기록하기</div>
       <button class="modal-close" id="modal-close">✕</button>
     </div>
     <div class="modal-body">
@@ -314,7 +314,7 @@ body{font-family:'Pretendard',-apple-system,sans-serif;background:var(--bg);colo
 <script>
 'use strict';
 // ── STATE ──
-var places=[], filter='all', selType='cafe', selColor='', pendingCoord=null, photoDataUrl=null, activePopupId=null;
+var places=[], filter='all', selType='cafe', selColor='', pendingCoord=null, photoDataUrl=null, activePopupId=null, editingId=null;
 var kakaoMap=null, kakaoMarkers=[], DONG_COLORS={}, CIDX=0;
 var PALETTE=['#3182F6','#E03030','#1A7F3C','#E07A00','#7B3FC4','#0891B2','#BE185D','#059669'];
 var EMOJI={cafe:'☕',shop:'🛍',dong:'🏘',book:'📚',etc:'📌'};
@@ -641,6 +641,40 @@ document.getElementById('mob-toggle').addEventListener('click',openSidebar);
 document.getElementById('mob-close').addEventListener('click',closeSidebar);
 
 // ── MODAL ──
+function openEditModal(id){
+  var p=places.find(function(x){return x.id===id;});
+  if(!p)return;
+  editingId=id;
+  openModal();
+  var titleEl=document.getElementById('modal-title-text');
+  if(titleEl)titleEl.textContent='장소 수정하기';
+  document.getElementById('submit-btn').textContent='수정 저장';
+  setTimeout(function(){
+    document.getElementById('f-name').value=p.name||'';
+    document.getElementById('f-dong').value=p.dong||'';
+    document.getElementById('f-address').value=p.address||'';
+    document.getElementById('f-memo').value=p.memo||'';
+    document.getElementById('f-url').value=p.url||'';
+    document.getElementById('f-date').value=p.date||'';
+    selType=p.type||'cafe';
+    document.querySelectorAll('.tbtn').forEach(function(b){b.classList.toggle('on',b.dataset.t===selType);});
+    selColor=p.color||'';
+    document.querySelectorAll('.csw').forEach(function(s){s.classList.remove('on');});
+    var sw=document.querySelector('.csw[data-c="'+selColor+'"]');
+    if(sw)sw.classList.add('on');
+    else document.querySelector('.csw[data-c=""]').classList.add('on');
+    if(p.lat&&p.lng){
+      pendingCoord={lat:p.lat,lng:p.lng,kakao:true};
+      document.getElementById('coord-val').textContent=p.lat.toFixed(5)+', '+p.lng.toFixed(5);
+    }
+    if(p.photo){
+      photoDataUrl=p.photo;
+      document.getElementById('photo-prev').src=p.photo;
+      document.getElementById('photo-prev').style.display='block';
+      document.getElementById('photo-ph').style.display='none';
+    }
+  },50);
+}
 function openModal(){document.getElementById('overlay').classList.add('show');}
 function closeModal(){document.getElementById('overlay').classList.remove('show');resetForm();}
 function resetForm(){
@@ -651,7 +685,8 @@ function resetForm(){
   document.getElementById('f-date').value=new Date().toISOString().split('T')[0];
   document.getElementById('submit-btn').textContent='저장하기';
   document.getElementById('submit-btn').disabled=false;
-  photoDataUrl=null;pendingCoord=null;selType='cafe';selColor='';
+  photoDataUrl=null;pendingCoord=null;selType='cafe';selColor='';editingId=null;
+  var t=document.getElementById('modal-title-text');if(t)t.textContent='장소 기록하기';
   document.querySelectorAll('.tbtn').forEach(function(b){b.classList.toggle('on',b.dataset.t==='cafe');});
   document.querySelectorAll('.csw').forEach(function(s){s.classList.remove('on');});
   document.querySelector('.csw[data-c=""]').classList.add('on');
@@ -686,12 +721,19 @@ document.getElementById('submit-btn').addEventListener('click',async function(){
     });
     if(res){lat=res.lat;lng=res.lng;}
   }
-  var place={id:Date.now().toString(),name:name,type:selType,color:selColor,dong:dong,address:address,
+  var isEdit=!!editingId;
+  var placeId=isEdit?editingId:Date.now().toString();
+  var place={id:placeId,name:name,type:selType,color:selColor,dong:dong,address:address,
     memo:document.getElementById('f-memo').value.trim(),url:document.getElementById('f-url').value.trim(),
     date:document.getElementById('f-date').value,photo:photoDataUrl||null,lat:lat,lng:lng,
     x:(pendingCoord&&!pendingCoord.kakao)?pendingCoord.x:null,y:(pendingCoord&&!pendingCoord.kakao)?pendingCoord.y:null};
-  places.unshift(place);
-  await savePlaces(place); // 새 장소를 Supabase에 개별 저장
+  if(isEdit){
+    var idx=places.findIndex(function(p){return p.id===placeId;});
+    if(idx>=0)places[idx]=place;
+  } else {
+    places.unshift(place);
+  }
+  await savePlaces(place);
   renderSidebar();
   if(kakaoMap){renderKakaoMarkers();if(lat&&lng)setTimeout(function(){kakaoMap.setCenter(new window.kakao.maps.LatLng(lat,lng));showKakaoPopup(place);},200);}
   else renderPins();
