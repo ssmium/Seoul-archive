@@ -1118,12 +1118,17 @@ function loadKakaoScript(apiKey) {
     if (window.kakao && window.kakao.maps) { resolve(); return; }
     document.querySelectorAll('script[src*="dapi.kakao.com"]').forEach(function(s) { s.remove(); });
     var script = document.createElement('script');
-    script.src = 'https://dapi.kakao.com/v2/maps/sdk.js?appkey=' + apiKey + '&libraries=services';
+    script.src = 'https://dapi.kakao.com/v2/maps/sdk.js?appkey=' + apiKey + '&libraries=services&autoload=false';
     var timer = setTimeout(function() { reject(new Error('timeout')); }, 10000);
     script.onload = function() {
       clearTimeout(timer);
-      if (window.kakao && window.kakao.maps) { resolve(); }
-      else { reject(new Error('auth_fail')); }
+      if (window.kakao && window.kakao.maps) {
+        window.kakao.maps.load(function() {
+          resolve();
+        });
+      } else {
+        reject(new Error('auth_fail'));
+      }
     };
     script.onerror = function() { clearTimeout(timer); reject(new Error('script_error')); };
     document.head.appendChild(script);
