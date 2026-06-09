@@ -552,6 +552,7 @@
         <button class="filter-tab" data-filter="shop">소품샵</button>
         <button class="filter-tab" data-filter="dong">동네</button>
       </div>
+      <div id="dong-legend" style="display:none;flex-wrap:wrap;gap:6px;margin-top:10px;padding-top:10px;border-top:1px solid var(--line);"></div>
     </div>
     <div class="place-list" id="place-list">
       <div class="empty-state" id="empty-state">
@@ -750,6 +751,7 @@ function renderSidebar() {
     : places.filter(p => p.type === activeFilter);
 
   stat.textContent = `${places.length}곳 기록됨`;
+  if (kakaoMap) updateDongLegend();
 
   if (filtered.length === 0) {
     list.innerHTML = '';
@@ -1082,6 +1084,8 @@ document.getElementById('btn-submit').addEventListener('click', async function()
   btn.textContent = '저장하기';
   btn.disabled = false;
   closeModal();
+  // 카카오 팝업(InfoWindow)도 닫기
+  if (window._kakaoIW) { window._kakaoIW.close(); window._kakaoIW = null; }
 });
 
 // Filter tabs
@@ -1179,52 +1183,129 @@ function initKakaoMap() {
   renderKakaoMarkers();
 }
 
+// 동네별 색상 팔레트
+var DONG_COLORS = {};
+var COLOR_PALETTE = [
+  '#3182F6', '#E03030', '#1A7F3C', '#E07A00', '#7B3FC4',
+  '#0891B2', '#BE185D', '#059669', '#D97706', '#7C3AED'
+];
+var colorIndex = 0;
+
+function getDongColor(dong) {
+  if (!dong) return '#3182F6';
+  if (!DONG_COLORS[dong]) {
+    DONG_COLORS[dong] = COLOR_PALETTE[colorIndex % COLOR_PALETTE.length];
+    colorIndex++;
+  }
+  return DONG_COLORS[dong];
+}
+
+// 유형별 이모지
+function getTypeEmoji(type) {
+  var map = { cafe: '☕', shop: '🛍', dong: '🏘', etc: '📌' };
+  return map[type] || '📍';
+}
+
 function renderKakaoMarkers() {
   if (!kakaoMap) return;
   kakaoMarkers.forEach(function(m) { m.setMap(null); });
   kakaoMarkers = [];
 
+  // 동네 색상 초기화 (매번 일관되게)
+  DONG_COLORS = {};
+  colorIndex = 0;
+  // 먼저 동네 목록 순서대로 색상 할당
+  var dongs = [];
+  places.forEach(function(p) { if (p.dong && dongs.indexOf(p.dong) === -1) dongs.push(p.dong); });
+  dongs.forEach(function(d) { getDongColor(d); });
+
   places.forEach(function(p) {
     if (!p.lat || !p.lng) return;
-    const pos = new window.kakao.maps.LatLng(p.lat, p.lng);
-    const el = document.createElement('div');
-    el.style.cssText = 'background:' + (p.type === 'dong' ? '#191F28' : '#3182F6') +
-      ';color:white;padding:5px 10px;border-radius:20px 20px 20px 4px;font-size:12px;font-weight:700;' +
-      'font-family:Pretendard,sans-serif;box-shadow:0 2px 8px rgba(0,0,0,.25);white-space:nowrap;cursor:pointer;';
-    el.textContent = p.name;
+    var pos = new window.kakao.maps.LatLng(p.lat, p.lng);
+    var color = getDongColor(p.dong);
+    var emoji = getTypeEmoji(p.type);
 
-    const overlay = new window.kakao.maps.CustomOverlay({
-      position: pos, content: el, yAnchor: 1.3
+    // 핀 엘리먼트
+    var el = document.createElement('div');
+    el.style.cssText = [
+      'position:relative',
+      'display:inline-flex',
+      'align-items:center',
+      'gap:4px',
+      'background:' + color,
+      'color:white',
+      'padding:5px 10px 5px 7px',
+      'border-radius:20px',
+      'font-size:12px',
+      'font-weight:700',
+      'font-family:Pretendard,sans-serif',
+      'box-shadow:0 2px 10px rgba(0,0,0,.25)',
+      'white-space:nowrap',
+      'cursor:pointer',
+      'border:2px solid white',
+      'transition:transform 0.15s'
+    ].join(';');
+    el.innerHTML = '<span style="font-size:13px">' + emoji + '</span><span>' + p.name + '</span>';
+
+    // 호버 효과
+    el.addEventListener('mouseenter', function() { el.style.transform = 'scale(1.1)'; });
+    el.addEventListener('mouseleave', function() { el.style.transform = 'scale(1)'; });
+
+    var overlay = new window.kakao.maps.CustomOverlay({
+      position: pos, content: el, yAnchor: 1.4
     });
     overlay.setMap(kakaoMap);
 
-    (function(place) {
+    (function(place, pinColor) {
       el.addEventListener('click', function() {
         if (window._kakaoIW) window._kakaoIW.close();
-        const imgHtml = place.photo
-          ? '<img src="' + place.photo + '" style="width:100%;height:80px;object-fit:cover;border-radius:8px;margin-bottom:8px;">'
+        var imgHtml = place.photo
+          ? '<img src="' + place.photo + '" style="width:100%;height:90px;object-fit:cover;border-radius:8px;margin-bottom:10px;">'
           : '';
-        const blogHtml = place.url
-          ? '<a href="' + place.url + '" target="_blank" style="font-size:12px;color:#3182F6;font-weight:600;">✍ 포스팅 보기 →</a>'
+        var blogHtml = place.url
+          ? '<a href="' + place.url + '" target="_blank" style="display:inline-block;margin-top:8px;font-size:12px;color:' + pinColor + ';font-weight:600;">✍ 포스팅 보기 →</a>'
           : '';
-        const iw = new window.kakao.maps.InfoWindow({
+        var deleteHtml = '<button onclick="deletePlace('' + place.id + '');if(window._kakaoIW)window._kakaoIW.close();" '
+          + 'style="display:block;width:100%;margin-top:8px;padding:7px;background:#FFF0F0;color:#E03030;'
+          + 'border:none;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;font-family:Pretendard,sans-serif;">🗑 삭제</button>';
+        var iw = new window.kakao.maps.InfoWindow({
           position: pos,
-          content: '<div style="padding:14px;min-width:180px;max-width:220px;font-family:Pretendard,sans-serif;">' +
-            imgHtml +
-            '<div style="font-size:14px;font-weight:700;margin-bottom:2px;">' + place.name + '</div>' +
-            '<div style="font-size:12px;color:#6B7684;margin-bottom:6px;">' + (place.dong || '') + (place.date ? ' · ' + place.date : '') + '</div>' +
-            (place.memo ? '<div style="font-size:12px;color:#191F28;margin-bottom:6px;">' + place.memo + '</div>' : '') +
-            blogHtml +
-            '</div>',
+          content: '<div style="padding:14px;min-width:180px;max-width:220px;font-family:Pretendard,sans-serif;">'
+            + imgHtml
+            + '<div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;">'
+            + '<span style="width:8px;height:8px;border-radius:50%;background:' + pinColor + ';flex-shrink:0;display:inline-block;"></span>'
+            + '<span style="font-size:14px;font-weight:700;">' + place.name + '</span>'
+            + '</div>'
+            + '<div style="font-size:12px;color:#6B7684;margin-bottom:4px;">' + (place.dong || '') + (place.date ? ' · ' + place.date : '') + '</div>'
+            + (place.memo ? '<div style="font-size:12px;color:#191F28;line-height:1.5;margin-bottom:4px;">' + place.memo + '</div>' : '')
+            + blogHtml
+            + deleteHtml
+            + '</div>',
           removable: true
         });
         iw.open(kakaoMap);
         window._kakaoIW = iw;
       });
-    })(p);
+    })(p, color);
 
     kakaoMarkers.push(overlay);
   });
+
+  // 사이드바에 동네 색상 범례 업데이트
+  updateDongLegend();
+}
+
+function updateDongLegend() {
+  var legend = document.getElementById('dong-legend');
+  if (!legend) return;
+  var entries = Object.entries(DONG_COLORS);
+  if (!entries.length) { legend.style.display = 'none'; return; }
+  legend.style.display = 'flex';
+  legend.innerHTML = entries.map(function(e) {
+    return '<span style="display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:600;color:#191F28;">'
+      + '<span style="width:8px;height:8px;border-radius:50%;background:' + e[1] + ';display:inline-block;"></span>'
+      + e[0] + '</span>';
+  }).join('');
 }
 
 // Kakao setup handlers
