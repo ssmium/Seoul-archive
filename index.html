@@ -515,15 +515,7 @@
     border-radius: 20px; margin-bottom: 6px;
   }
 </style>
-<script>
-// 저장된 카카오 키가 있으면 head에 직접 삽입 (서울어디갈까 방식)
-(function(){
-  var key = localStorage.getItem('kakao_js_key');
-  if(key){
-    document.write('<scr'+'ipt type="text/javascript" src="//dapi.kakao.com/v2/maps/sdk.js?appkey='+key+'&libraries=services"><\/scr'+'ipt>');
-  }
-})();
-</script>
+
 </head>
 <body>
 
@@ -1122,30 +1114,18 @@ let kakaoMap = null;
 let kakaoMarkers = [];
 
 function loadKakaoScript(apiKey) {
-  return new Promise((resolve, reject) => {
-    // 이미 로드돼 있으면 바로 resolve
-    if (window.kakao && window.kakao.maps) {
-      resolve();
-      return;
-    }
-    // head에 직접 script 태그 추가 (서울어디갈까 방식)
-    document.querySelectorAll('script[src*="dapi.kakao.com"]').forEach(s => s.remove());
-    const script = document.createElement('script');
-    script.type = 'text/javascript';
-    script.src = '//dapi.kakao.com/v2/maps/sdk.js?appkey=' + apiKey + '&libraries=services';
-    const timer = setTimeout(() => reject(new Error('timeout')), 10000);
+  return new Promise(function(resolve, reject) {
+    if (window.kakao && window.kakao.maps) { resolve(); return; }
+    document.querySelectorAll('script[src*="dapi.kakao.com"]').forEach(function(s) { s.remove(); });
+    var script = document.createElement('script');
+    script.src = 'https://dapi.kakao.com/v2/maps/sdk.js?appkey=' + apiKey + '&libraries=services';
+    var timer = setTimeout(function() { reject(new Error('timeout')); }, 10000);
     script.onload = function() {
       clearTimeout(timer);
-      if (window.kakao && window.kakao.maps) {
-        resolve();
-      } else {
-        reject(new Error('auth_fail'));
-      }
+      if (window.kakao && window.kakao.maps) { resolve(); }
+      else { reject(new Error('auth_fail')); }
     };
-    script.onerror = function() {
-      clearTimeout(timer);
-      reject(new Error('script_error'));
-    };
+    script.onerror = function() { clearTimeout(timer); reject(new Error('script_error')); };
     document.head.appendChild(script);
   });
 }
@@ -1265,7 +1245,7 @@ function renderKakaoMarkers() {
         var blogHtml = place.url
           ? '<a href="' + place.url + '" target="_blank" style="display:inline-block;margin-top:8px;font-size:12px;color:' + pinColor + ';font-weight:600;">✍ 포스팅 보기 →</a>'
           : '';
-        var deleteHtml = '<button onclick="deletePlace('' + place.id + '');if(window._kakaoIW)window._kakaoIW.close();" '
+        var deleteHtml = '<button onclick="deletePlace(\"' + place.id + '\");if(window._kakaoIW)window._kakaoIW.close();" '
           + 'style="display:block;width:100%;margin-top:8px;padding:7px;background:#FFF0F0;color:#E03030;'
           + 'border:none;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;font-family:Pretendard,sans-serif;">🗑 삭제</button>';
         var iw = new window.kakao.maps.InfoWindow({
@@ -1358,23 +1338,14 @@ if (savedKakaoKey) {
   document.getElementById('kakao-key-input').value = '••••••••••••••••••••••••••••••••';
   document.getElementById('kakao-connected-badge').classList.remove('hidden');
   // document.write 방식으로 이미 로드됐을 수 있으니 잠시 기다렸다가 확인
-  setTimeout(function() {
-    if (window.kakao && window.kakao.maps) {
-      // 이미 head script로 로드 완료
-      initKakaoMap();
-      document.getElementById('kakao-setup').classList.add('hidden');
-    } else {
-      // 아직 안 됐으면 동적 로드 시도
-      loadKakaoScript(savedKakaoKey).then(function() {
-        initKakaoMap();
-        document.getElementById('kakao-setup').classList.add('hidden');
-      }).catch(function() {
-        localStorage.removeItem('kakao_js_key');
-        document.getElementById('kakao-connected-badge').classList.add('hidden');
-        document.getElementById('kakao-key-input').value = '';
-      });
-    }
-  }, 300);
+  loadKakaoScript(savedKakaoKey).then(function() {
+    initKakaoMap();
+    document.getElementById('kakao-setup').classList.add('hidden');
+  }).catch(function() {
+    localStorage.removeItem('kakao_js_key');
+    document.getElementById('kakao-connected-badge').classList.add('hidden');
+    document.getElementById('kakao-key-input').value = '';
+  });
 }
 
 // Re-render SVG pins on resize (when kakao not loaded)
