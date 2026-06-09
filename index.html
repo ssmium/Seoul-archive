@@ -1053,10 +1053,31 @@ let kakaoMarkers = [];
 function loadKakaoScript(apiKey) {
   return new Promise((resolve, reject) => {
     if (window.kakao && window.kakao.maps) { resolve(); return; }
+    // Remove previously failed script tags
+    document.querySelectorAll('script[src*="dapi.kakao.com"]').forEach(s => s.remove());
     const script = document.createElement('script');
-    script.src = '//dapi.kakao.com/v2/maps/sdk.js?appkey=' + apiKey + '&autoload=false';
-    script.onload = function() { window.kakao.maps.load(resolve); };
-    script.onerror = function() { reject(new Error('failed')); };
+    script.src = 'https://dapi.kakao.com/v2/maps/sdk.js?appkey=' + apiKey + '&autoload=false';
+    const timer = setTimeout(() => reject(new Error('timeout')), 8000);
+    script.onload = function() {
+      clearTimeout(timer);
+      try {
+        window.kakao.maps.load(function() {
+          // Test if map actually works
+          try {
+            new window.kakao.maps.LatLng(37.5, 127.0);
+            resolve();
+          } catch(e2) {
+            reject(new Error('auth_fail'));
+          }
+        });
+      } catch(e) {
+        reject(new Error('load_fail'));
+      }
+    };
+    script.onerror = function() {
+      clearTimeout(timer);
+      reject(new Error('script_error'));
+    };
     document.head.appendChild(script);
   });
 }
@@ -1158,8 +1179,14 @@ document.getElementById('kakao-setup-btn').addEventListener('click', async funct
     const errDiv = document.getElementById('kakao-err-msg');
     if (errDiv) {
       errDiv.style.display = 'block';
-      const origin = location.protocol + '//' + (location.hostname || 'localhost');
-      errDiv.innerHTML = '❌ 연결 실패 — 카카오 콘솔 &gt; 플랫폼 &gt; Web에<br><code style="background:#F2F4F6;padding:2px 5px;border-radius:4px;">' + origin + '</code><br>등록 후 다시 시도해주세요.';
+      const origin = location.protocol + '//' + location.hostname;
+      const msg = e && e.message;
+      let hint = '';
+      if (msg === 'timeout') hint = '8초 내 응답 없음. 네트워크 확인.';
+      else if (msg === 'auth_fail') hint = '키 인증 실패. JS SDK 도메인에 <b>' + origin + '</b> 등록 확인.';
+      else if (msg === 'script_error') hint = '스크립트 로드 오류. 키 값 자체가 틀렸을 수 있어요.';
+      else hint = '알 수 없는 오류: ' + (msg || '?');
+      errDiv.innerHTML = '❌ ' + hint + '<br><br>현재 주소: <code style="background:#F2F4F6;padding:2px 5px;border-radius:4px;">' + origin + '</code>';
     }
   }
 });
